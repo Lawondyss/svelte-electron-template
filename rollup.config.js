@@ -2,7 +2,6 @@ import svelte from 'rollup-plugin-svelte'
 import commonjs from '@rollup/plugin-commonjs'
 import resolve from '@rollup/plugin-node-resolve'
 import json from '@rollup/plugin-json'
-import livereload from 'rollup-plugin-livereload'
 import { terser } from 'rollup-plugin-terser'
 import css from 'rollup-plugin-css-only'
 
@@ -12,21 +11,32 @@ const production = !process.env.ROLLUP_WATCH
 function serve() {
 	let server
 
-	function toExit() {
+	function exit() {
 		if (server) server.kill(0)
 	}
 
+	function restart() {
+		exit()
+		start()
+	}
+
+	function start() {
+		server = require('child_process').spawn('npm', ['run', 'start'], {
+			stdio: ['ignore', 'inherit', 'inherit'],
+			shell: true
+		})
+		
+		server.on('exit', restart)
+	}
+ 
 	return {
 		writeBundle() {
 			if (server) return
 			
-			server = require('child_process').spawn('npm', ['run', 'start'], {
-				stdio: ['ignore', 'inherit', 'inherit'],
-				shell: true
-			})
+			start()
 
-			process.on('SIGTERM', toExit)
-			process.on('exit', toExit)
+			process.on('SIGTERM', exit)
+			process.on('exit', exit)
 		}
 	}
 }
@@ -34,7 +44,7 @@ function serve() {
 export default {
 	input: 'frontend/app.js',
 	output: {
-		sourcemap: true,
+		sourcemap: production,
 		format: 'iife',
 		name: 'app',
 		file: 'public/build/bundle.js',
@@ -66,10 +76,6 @@ export default {
 		// In dev mode, call `npm run start` once
 		// the bundle has been generated
 		!production && serve(),
-
-		// Watch the `public` directory and refresh the
-		// browser on changes when not in production
-		!production && livereload('public'),
 
 		// If we're building for production (npm run build
 		// instead of npm run dev), minify
